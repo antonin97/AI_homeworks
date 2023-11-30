@@ -158,23 +158,79 @@ def reset_mes(mes, pop):
 # senzorické funkce 
 # -----------------------------------------------------------------------------    
 
+def rect_distance(obj1, obj2):
+    return math.sqrt( \
+        (((obj1.rect.x + obj1.rect.width) // 2) - (obj2.rect.x + obj2.rect.width) // 2) ** 2 + \
+        (((obj1.rect.y + me.rect.height) // 2) - (obj2.rect.y + obj2.rect.height) // 2) ** 2 \
+    )
 
+def rect_manhattan_distance(obj1, obj2):
+    return abs(((obj1.rect.x + obj1.rect.width) // 2) - ((obj2.rect.x + obj2.rect.width) // 2)) + \
+           abs(((obj1.rect.y + obj1.rect.height) // 2) - ((obj2.rect.y + obj2.rect.height) // 2))
 
+def mine_center(mine):
+    return ((mine.rect.x + mine.rect.width) // 2), ((mine.rect.y + mine.rect.height) // 2))
 
-# TODO
+def mine_distance(me, mine):
+    me_center = ((me.rect.x + me.rect.width) // 2), ((me.rect.y + me.rect.height) // 2))
+    mine_center = mine_center(mine)
+    me_mine_distance = math.sqrt((me_center[0] - mine_center[0]) ** 2 + (me_center[1] - mine_center[1]) ** 2)
+    mine_direction = (mine.dirx, mine.diry)
+    return(me_mine_distance, mine_direction)
+
+def mine_in_sight(me, mine, direction):
+    if direction == 1:
+        x = me.rect.x
+        y = max(me.rect.y - me.rect.height * 3, 0)
+        width = me.rect.width
+        height = me.rect.y - y
+    elif direction == 2:
+        x = me.rect.x
+        y = me.rect.y - me.rect.height
+        width = me.rect.width
+        height = min(me.rect.height * 3, HEIGHT - me.y)
+    elif direction == 3:
+        x = max(me.rect.x - me.rect.height * 3, 0)
+        y = me.rect.y
+        width = min(me.rect.x, me.rect.width * 3)
+        height = me.rect.height
+    elif direction == 4:
+        x = me.rect.x + me.rect.width
+        y = me.rect.y
+        width = min(WIDTH - me.x + me.rect.width, me.rect.width * 3
+        height = me.rect.height
+    view = pygame.Rect(x, y, width, height)
+    return view.colliderect(mine.rect)
+
 
 def my_senzor(me, mines, flag):
-    
-    return 1
+
+    # two different distances calculations between me and the flag
+    me_flag_distance = rect_distance(me, flag)
+    me_flag_manhattan_distance = rect_manhattan_distance(me, flag)
+
+    # distance to the closest mine + its directions of movement
+    me_mines_distances = [mine_distance(me, mine) for mine in mines] 
+    closest_mine_distance, (closest_mine_xdir, closest_mine_ydir) = min(me_mines_distances, key=lambda x: x[0]
+                                                                      
+    # number of mines in corresponding directions
+    n_mines_up = [mine_in_sight(me, mine, 1) for mine in mines].count(True)
+    n_mines_down = [mine_in_sight(me, mine, 2) for mine in mines].count(True)
+    n_mines_left = [mine_in_sight(me, mine, 3) for mine in mines].count(True)
+    n_mines_right = [mine_in_sight(me, mine, 4) for mine in mines].count(True)
 
 
-# -----> ZDE je prostor pro vlastní senzorické funkce !!!!
-
-
-
-
-
-
+    return [
+        me_flag_distance,
+        me_flag_manhattan_distance,
+        closest_mine_distance,
+        closest_mine_xdir,
+        closes_mine_ydir,
+        n_mines_up,
+        n_mines_down,
+        n_mines_left,
+        n_mines_right
+           ]
 
 
 
@@ -438,10 +494,11 @@ def update_mes_timers(mes, timer):
 
 
 # funkce pro výpočet fitness všech jedinců
-def handle_mes_fitnesses(mes):  fg  
+def handle_mes_fitnesses(mes): 
     
     # <--------- TODO  ZDE se počítá fitness jedinců !!!!
     # na základě informací v nich uložených, či jiných vstupů
+                      
     for me in mes:
         me.fitness = me.timealive
     
@@ -461,8 +518,8 @@ def update_hof(hof, mes):
 def main():
     
     # creating an outline of the neural network. Weights are set later on.
-    # 4 inputs, *hidden layers, 4 outputs
-    NN_layout = [4, 5, 5, 4]
+    # 9 inputs, *hidden layers, 4 outputs
+    NN_layout = [9, 8, 8, 4]
     NN = create_nn_function(NN_layout)
     n_weights = sum(NN_layout[i] * NN_layout[i + 1] for i in range(len(NN_layout) - 1))
     
