@@ -12,7 +12,7 @@ from deap import tools
 
 pygame.font.init()
 
-np.random.seed(123)
+random.seed(13246)
 
 #-----------------------------------------------------------------------------
 # Parametry hry 
@@ -90,7 +90,8 @@ class Mine:
 # trida reprezentujici me, tedy meho agenta        
 class Me:
     def __init__(self):
-        self.rect = pygame.Rect(10, random.randint(1, 300), ME_SIZE, ME_SIZE)  
+        self.rect = pygame.Rect(10, 10, ME_SIZE, ME_SIZE)  
+        self.default_position = (10, 10)
         self.alive = True
         self.won = False
         self.timealive = 0
@@ -208,6 +209,9 @@ def my_senzor(me, mines, flag):
     # two different distances calculations between me and the flag
     me_flag_distance = rect_distance(me, flag)
 
+    me_flag_x_distance = abs(me.rect.x - flag.rect.x)
+    me_flag_y_distance = abs(me.rect.y - flag.rect.y)
+
     # distance to the closest mine + its directions of movement
     me_mines_distances = [mine_distance(me, mine) for mine in mines] 
     closest_mine_distance, (closest_mine_xdir, closest_mine_ydir) = min(me_mines_distances, key=lambda x: x[0])
@@ -221,6 +225,8 @@ def my_senzor(me, mines, flag):
 
     return [
         me_flag_distance,
+        me_flag_x_distance,
+        me_flag_y_distance,
         closest_mine_distance,
         closest_mine_xdir,
         closest_mine_ydir,
@@ -493,6 +499,18 @@ def update_mes_timers(mes, timer):
 # fitness funkce výpočty jednotlivců
 #----------------------------------------------------------------------------
 
+def mover_func(me, flag):
+    default_distance_x = abs(me.default_position[0] - flag.rect.x)
+    default_distance_y = abs(me.default_position[1] - flag.rect.y)
+    current_distance_x = abs(me.rect.x - flag.rect.x)
+    current_distance_y = abs(me.rect.y - flag.rect.y)
+    difference_x = abs(default_distance_x - current_distance_x)
+    difference_y = abs(default_distance_y - current_distance_y)
+    product = difference_x * difference_y
+    if not (current_distance_x < default_distance_x and current_distance_y < default_distance_y):
+        product *= -1
+    return product
+
 
 
 # funkce pro výpočet fitness všech jedinců
@@ -504,8 +522,7 @@ def handle_mes_fitnesses(mes, flag):
     for me in mes:
         fitness = me.won * 3000 # 0 not won, 3000 won
         fitness += me.dist * 3 # distance covered
-        fitness -= abs(me.rect.x - flag.rect.x) # difference in x coordinates of me and flag
-        fitness -= abs(me.rect.y - flag.rect.y) # difference in y coordinates of me and flag
+        fitness += mover_func(me, flag)
         me.fitness = fitness
     
     
@@ -525,7 +542,7 @@ def main():
     
     # creating an outline of the neural network. Weights are set later on.
     # 9 inputs, *hidden layers, 4 outputs
-    NN_layout = [8, 6, 6, 4]
+    NN_layout = [10, 6, 6, 4]
     NN = create_nn_function(NN_layout)
     n_weights = sum(NN_layout[i] * NN_layout[i + 1] for i in range(len(NN_layout) - 1))
     
