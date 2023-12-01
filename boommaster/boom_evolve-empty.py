@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-
 import pygame
 import numpy as np
 import random
@@ -14,6 +12,7 @@ from deap import tools
 
 pygame.font.init()
 
+np.random.seed(123)
 
 #-----------------------------------------------------------------------------
 # Parametry hry 
@@ -29,7 +28,7 @@ WHITE = (255, 255, 255)
 TITLE = "Boom Master"
 pygame.display.set_caption(TITLE)
 
-FPS = 10000
+FPS = 80
 ME_VELOCITY = 5
 MAX_MINE_VELOCITY = 3
 
@@ -98,6 +97,8 @@ class Me:
         self.sequence = []
         self.fitness = 0
         self.dist = 0
+        self.last_movement = None
+        self.changes = 0
     
     
 # třída reprezentující cíl = praporek    
@@ -202,12 +203,10 @@ def mine_in_sight(me, mine, direction):
     view = pygame.Rect(x, y, width, height)
     return view.colliderect(mine.rect)
 
-
 def my_senzor(me, mines, flag):
 
     # two different distances calculations between me and the flag
     me_flag_distance = rect_distance(me, flag)
-    me_flag_manhattan_distance = rect_manhattan_distance(me, flag)
 
     # distance to the closest mine + its directions of movement
     me_mines_distances = [mine_distance(me, mine) for mine in mines] 
@@ -222,7 +221,6 @@ def my_senzor(me, mines, flag):
 
     return [
         me_flag_distance,
-        me_flag_manhattan_distance,
         closest_mine_distance,
         closest_mine_xdir,
         closest_mine_ydir,
@@ -433,6 +431,9 @@ def nn_navigate_me(me, inp, nn_function):
     outputs = nn_function(inp, me.sequence)
 
     ind = np.argmax(outputs)
+    if ind != me.last_movement:
+        me.changes += 1
+        me.last_movement = ind
     
     # nahoru, pokud není zeď
     if ind == 0 and me.rect.y - ME_VELOCITY > 0:
@@ -463,6 +464,7 @@ def check_mes_won(mes, flag):
         if me.alive and not me.won:
             if me_won(me, flag):
                 me.won = True
+                print(me.sequence)
     
 
 
@@ -500,7 +502,11 @@ def handle_mes_fitnesses(mes, flag):
     # na základě informací v nich uložených, či jiných vstupů
                       
     for me in mes:
-        me.fitness = -rect_distance(me, flag)
+        fitness = me.won * 3000 # 0 not won, 3000 won
+        fitness += me.dist * 3 # distance covered
+        fitness -= abs(me.rect.x - flag.rect.x) # difference in x coordinates of me and flag
+        fitness -= abs(me.rect.y - flag.rect.y) # difference in y coordinates of me and flag
+        me.fitness = fitness
     
     
 
@@ -519,21 +525,20 @@ def main():
     
     # creating an outline of the neural network. Weights are set later on.
     # 9 inputs, *hidden layers, 4 outputs
-    NN_layout = [9, 8, 8, 4]
+    NN_layout = [8, 6, 6, 4]
     NN = create_nn_function(NN_layout)
     n_weights = sum(NN_layout[i] * NN_layout[i + 1] for i in range(len(NN_layout) - 1))
     
     
     # =====================================================================
-    VELIKOST_POPULACE = 3
+    VELIKOST_POPULACE = 50
     EVO_STEPS = 20  # pocet kroku evoluce
-    # 
     DELKA_JEDINCE = n_weights   # záleží na počtu vah a prahů u neuronů !!!!!
     NGEN = 30        # počet generací
     CXPB = 0.6          # pravděpodobnost crossoveru na páru
-    MUTPB = 0.4       # pravděpodobnost mutace
+    MUTPB = 0.2      # pravděpodobnost mutace
     
-    SIMSTEPS = 1000
+    SIMSTEPS = 500
     
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMax)
@@ -544,8 +549,6 @@ def main():
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_rand, DELKA_JEDINCE)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    # vlastni random mutace
-    # <----- ZDE TODO vlastní mutace
     def mutRandom(individual, indpb):
         for i in range(len(individual)):
             if random.random() < indpb:
@@ -578,7 +581,7 @@ def main():
     
     run = True
 
-    level = 1   # <--- ZDE nastavení obtížnosti počtu min !!!!!
+    level = 5  # <--- ZDE nastavení obtížnosti počtu min !!!!!
     generation = 0
     
     evolving = True
