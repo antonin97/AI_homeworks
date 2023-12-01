@@ -470,7 +470,6 @@ def check_mes_won(mes, flag):
         if me.alive and not me.won:
             if me_won(me, flag):
                 me.won = True
-                print(me.sequence)
     
 
 
@@ -517,10 +516,12 @@ def mover_func(me, flag):
 def handle_mes_fitnesses(mes, flag): 
     
     # <--------- TODO  ZDE se počítá fitness jedinců !!!!
-    # na základě informací v nich uložených, či jiných vstupů
-                      
+    # na základě informací v nich uložených, či jiných vstupů          
     for me in mes:
-        fitness = me.won * 3000 # 0 not won, 3000 won
+        default_distance_x = abs(me.default_position[0] - flag.rect.x)
+        default_distance_y = abs(me.default_position[1] - flag.rect.y)
+        optimal_factor = default_distance_x * default_distance_y
+        fitness = me.won * optimal_factor # 0 not won, 3000 won
         fitness += me.dist * 3 # distance covered
         fitness += mover_func(me, flag)
         me.fitness = fitness
