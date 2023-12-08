@@ -160,19 +160,23 @@ def reset_mes(mes, pop):
 # senzorické funkce 
 # -----------------------------------------------------------------------------    
 
+# distance between two object (Pythagoras)
 def rect_distance(obj1, obj2):
     return math.sqrt( \
         (((obj1.rect.x + obj1.rect.width) // 2) - (obj2.rect.x + obj2.rect.width) // 2) ** 2 + \
         (((obj1.rect.y + obj1.rect.height) // 2) - (obj2.rect.y + obj2.rect.height) // 2) ** 2 \
     )
 
+# distance between two objects (Manhattan)
 def rect_manhattan_distance(obj1, obj2):
     return abs(((obj1.rect.x + obj1.rect.width) // 2) - ((obj2.rect.x + obj2.rect.width) // 2)) + \
            abs(((obj1.rect.y + obj1.rect.height) // 2) - ((obj2.rect.y + obj2.rect.height) // 2))
 
+# center of a mine
 def mine_center(mine):
     return ((mine.rect.x + mine.rect.width) // 2, ((mine.rect.y + mine.rect.height) // 2))
 
+# distance between me and a mine (centers)
 def mine_distance(me, mine):
     me_center = ((me.rect.x + me.rect.width) // 2, ((me.rect.y + me.rect.height) // 2))
     mine_cent = mine_center(mine)
@@ -180,6 +184,7 @@ def mine_distance(me, mine):
     mine_direction = (mine.dirx, mine.diry)
     return(me_mine_distance, mine_direction)
 
+# checks for mines in my sight (3* my width) in a given direction 
 def mine_in_sight(me, mine, direction):
     if direction == 1:
         x = me.rect.x
@@ -209,6 +214,7 @@ def my_senzor(me, mines, flag):
     # two different distances calculations between me and the flag
     me_flag_distance = rect_distance(me, flag)
 
+    # distance in either x and y direction
     me_flag_x_distance = abs(me.rect.x - flag.rect.x)
     me_flag_y_distance = abs(me.rect.y - flag.rect.y)
 
@@ -420,7 +426,7 @@ def create_nn_function(layers):
         for weight_matrix in weights_matrices:
             current_layer = current_layer @ weight_matrix
             
-            # applying ReLU activation function - changing all negative values to 0
+            # applying ReLU activation function with bias 0 - changing all negative values to 0
             current_layer[current_layer < 0] = 0
             
         return current_layer
@@ -498,6 +504,8 @@ def update_mes_timers(mes, timer):
 # fitness funkce výpočty jednotlivců
 #----------------------------------------------------------------------------
 
+# function designed to penalize individual if he moves further away from the mine, give him 0 evaluation, if he moves only in one direction
+# and rewarding him when moving towards the flag
 def mover_func(me, flag):
     default_distance_x = abs(me.default_position[0] - flag.rect.x)
     default_distance_y = abs(me.default_position[1] - flag.rect.y)
@@ -515,15 +523,22 @@ def mover_func(me, flag):
 # funkce pro výpočet fitness všech jedinců
 def handle_mes_fitnesses(mes, flag): 
     
-    # <--------- TODO  ZDE se počítá fitness jedinců !!!!
-    # na základě informací v nich uložených, či jiných vstupů          
+      
     for me in mes:
+        # calculating optimal factor
         default_distance_x = abs(me.default_position[0] - flag.rect.x)
         default_distance_y = abs(me.default_position[1] - flag.rect.y)
         optimal_factor = default_distance_x * default_distance_y
-        fitness = me.won * optimal_factor # 0 not won, 3000 won
-        fitness += me.dist * 3 # distance covered
+
+        # rewarding the individual for winning
+        fitness = me.won * optimal_factor
+
+        # rewarding for distance covered
+        fitness += me.dist * 3
+
+        # rewarding based on mover_func
         fitness += mover_func(me, flag)
+        
         me.fitness = fitness
     
     

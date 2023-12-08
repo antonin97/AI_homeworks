@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-
 import pygame
 import numpy as np
 import random
@@ -14,6 +12,7 @@ from deap import tools
 
 pygame.font.init()
 
+random.seed(13246)
 
 #-----------------------------------------------------------------------------
 # Parametry hry 
@@ -91,13 +90,16 @@ class Mine:
 # trida reprezentujici me, tedy meho agenta        
 class Me:
     def __init__(self):
-        self.rect = pygame.Rect(10, random.randint(1, 300), ME_SIZE, ME_SIZE)  
+        self.rect = pygame.Rect(10, 10, ME_SIZE, ME_SIZE)  
+        self.default_position = (10, 10)
         self.alive = True
         self.won = False
         self.timealive = 0
         self.sequence = []
         self.fitness = 0
         self.dist = 0
+        self.last_movement = None
+        self.changes = 0
     
     
 # třída reprezentující cíl = praporek    
@@ -158,26 +160,31 @@ def reset_mes(mes, pop):
 # senzorické funkce 
 # -----------------------------------------------------------------------------    
 
+# distance between two object (Pythagoras)
 def rect_distance(obj1, obj2):
     return math.sqrt( \
         (((obj1.rect.x + obj1.rect.width) // 2) - (obj2.rect.x + obj2.rect.width) // 2) ** 2 + \
-        (((obj1.rect.y + me.rect.height) // 2) - (obj2.rect.y + obj2.rect.height) // 2) ** 2 \
+        (((obj1.rect.y + obj1.rect.height) // 2) - (obj2.rect.y + obj2.rect.height) // 2) ** 2 \
     )
 
+# distance between two objects (Manhattan)
 def rect_manhattan_distance(obj1, obj2):
     return abs(((obj1.rect.x + obj1.rect.width) // 2) - ((obj2.rect.x + obj2.rect.width) // 2)) + \
            abs(((obj1.rect.y + obj1.rect.height) // 2) - ((obj2.rect.y + obj2.rect.height) // 2))
 
+# center of a mine
 def mine_center(mine):
-    return ((mine.rect.x + mine.rect.width) // 2), ((mine.rect.y + mine.rect.height) // 2))
+    return ((mine.rect.x + mine.rect.width) // 2, ((mine.rect.y + mine.rect.height) // 2))
 
+# distance between me and a mine (centers)
 def mine_distance(me, mine):
-    me_center = ((me.rect.x + me.rect.width) // 2), ((me.rect.y + me.rect.height) // 2))
-    mine_center = mine_center(mine)
-    me_mine_distance = math.sqrt((me_center[0] - mine_center[0]) ** 2 + (me_center[1] - mine_center[1]) ** 2)
+    me_center = ((me.rect.x + me.rect.width) // 2, ((me.rect.y + me.rect.height) // 2))
+    mine_cent = mine_center(mine)
+    me_mine_distance = math.sqrt((me_center[0] - mine_cent[0]) ** 2 + (me_center[1] - mine_cent[1]) ** 2)
     mine_direction = (mine.dirx, mine.diry)
     return(me_mine_distance, mine_direction)
 
+# checks for mines in my sight (3* my width) in a given direction 
 def mine_in_sight(me, mine, direction):
     if direction == 1:
         x = me.rect.x
@@ -188,7 +195,7 @@ def mine_in_sight(me, mine, direction):
         x = me.rect.x
         y = me.rect.y - me.rect.height
         width = me.rect.width
-        height = min(me.rect.height * 3, HEIGHT - me.y)
+        height = min(me.rect.height * 3, HEIGHT - me.rect.y)
     elif direction == 3:
         x = max(me.rect.x - me.rect.height * 3, 0)
         y = me.rect.y
@@ -197,21 +204,23 @@ def mine_in_sight(me, mine, direction):
     elif direction == 4:
         x = me.rect.x + me.rect.width
         y = me.rect.y
-        width = min(WIDTH - me.x + me.rect.width, me.rect.width * 3
+        width = min(WIDTH - me.rect.x + me.rect.width, me.rect.width * 3)
         height = me.rect.height
     view = pygame.Rect(x, y, width, height)
     return view.colliderect(mine.rect)
-
 
 def my_senzor(me, mines, flag):
 
     # two different distances calculations between me and the flag
     me_flag_distance = rect_distance(me, flag)
-    me_flag_manhattan_distance = rect_manhattan_distance(me, flag)
+
+    # distance in either x and y direction
+    me_flag_x_distance = abs(me.rect.x - flag.rect.x)
+    me_flag_y_distance = abs(me.rect.y - flag.rect.y)
 
     # distance to the closest mine + its directions of movement
     me_mines_distances = [mine_distance(me, mine) for mine in mines] 
-    closest_mine_distance, (closest_mine_xdir, closest_mine_ydir) = min(me_mines_distances, key=lambda x: x[0]
+    closest_mine_distance, (closest_mine_xdir, closest_mine_ydir) = min(me_mines_distances, key=lambda x: x[0])
                                                                       
     # number of mines in corresponding directions
     n_mines_up = [mine_in_sight(me, mine, 1) for mine in mines].count(True)
@@ -222,10 +231,11 @@ def my_senzor(me, mines, flag):
 
     return [
         me_flag_distance,
-        me_flag_manhattan_distance,
+        me_flag_x_distance,
+        me_flag_y_distance,
         closest_mine_distance,
         closest_mine_xdir,
-        closes_mine_ydir,
+        closest_mine_ydir,
         n_mines_up,
         n_mines_down,
         n_mines_left,
@@ -416,7 +426,7 @@ def create_nn_function(layers):
         for weight_matrix in weights_matrices:
             current_layer = current_layer @ weight_matrix
             
-            # applying ReLU activation function - changing all negative values to 0
+            # applying ReLU activation function with bias 0 - changing all negative values to 0
             current_layer[current_layer < 0] = 0
             
         return current_layer
@@ -430,9 +440,12 @@ def nn_navigate_me(me, inp, nn_function):
     movement = None
     
     # calling the neural network function given data from sensors and the current genom
-    outputs = nn_function(sensors, me.sequence)
+    outputs = nn_function(inp, me.sequence)
 
-    ind = outputs.index(max(outputs))
+    ind = np.argmax(outputs)
+    if ind != me.last_movement:
+        me.changes += 1
+        me.last_movement = ind
     
     # nahoru, pokud není zeď
     if ind == 0 and me.rect.y - ME_VELOCITY > 0:
@@ -491,16 +504,42 @@ def update_mes_timers(mes, timer):
 # fitness funkce výpočty jednotlivců
 #----------------------------------------------------------------------------
 
+# function designed to penalize individual if he moves further away from the mine, give him 0 evaluation, if he moves only in one direction
+# and rewarding him when moving towards the flag
+def mover_func(me, flag):
+    default_distance_x = abs(me.default_position[0] - flag.rect.x)
+    default_distance_y = abs(me.default_position[1] - flag.rect.y)
+    current_distance_x = abs(me.rect.x - flag.rect.x)
+    current_distance_y = abs(me.rect.y - flag.rect.y)
+    difference_x = abs(default_distance_x - current_distance_x)
+    difference_y = abs(default_distance_y - current_distance_y)
+    product = difference_x * difference_y
+    if not (current_distance_x < default_distance_x and current_distance_y < default_distance_y):
+        product *= -1
+    return product
+
 
 
 # funkce pro výpočet fitness všech jedinců
-def handle_mes_fitnesses(mes): 
+def handle_mes_fitnesses(mes, flag): 
     
-    # <--------- TODO  ZDE se počítá fitness jedinců !!!!
-    # na základě informací v nich uložených, či jiných vstupů
-                      
+      
     for me in mes:
-        me.fitness = me.timealive
+        # calculating optimal factor
+        default_distance_x = abs(me.default_position[0] - flag.rect.x)
+        default_distance_y = abs(me.default_position[1] - flag.rect.y)
+        optimal_factor = default_distance_x * default_distance_y
+
+        # rewarding the individual for winning
+        fitness = me.won * optimal_factor
+
+        # rewarding for distance covered
+        fitness += me.dist * 3
+
+        # rewarding based on mover_func
+        fitness += mover_func(me, flag)
+        
+        me.fitness = fitness
     
     
 
@@ -519,21 +558,20 @@ def main():
     
     # creating an outline of the neural network. Weights are set later on.
     # 9 inputs, *hidden layers, 4 outputs
-    NN_layout = [9, 8, 8, 4]
+    NN_layout = [10, 6, 6, 4]
     NN = create_nn_function(NN_layout)
     n_weights = sum(NN_layout[i] * NN_layout[i + 1] for i in range(len(NN_layout) - 1))
     
     
     # =====================================================================
-    VELIKOST_POPULACE = 10
+    VELIKOST_POPULACE = 50
     EVO_STEPS = 20  # pocet kroku evoluce
-    # 
     DELKA_JEDINCE = n_weights   # záleží na počtu vah a prahů u neuronů !!!!!
     NGEN = 30        # počet generací
     CXPB = 0.6          # pravděpodobnost crossoveru na páru
-    MUTPB = 0.2        # pravděpodobnost mutace
+    MUTPB = 0.2      # pravděpodobnost mutace
     
-    SIMSTEPS = 1000
+    SIMSTEPS = 500
     
     creator.create("FitnessMax", base.Fitness, weights=(1.0,))
     creator.create("Individual", list, fitness=creator.FitnessMax)
@@ -544,8 +582,6 @@ def main():
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_rand, DELKA_JEDINCE)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
-    # vlastni random mutace
-    # <----- ZDE TODO vlastní mutace
     def mutRandom(individual, indpb):
         for i in range(len(individual)):
             if random.random() < indpb:
@@ -578,7 +614,7 @@ def main():
     
     run = True
 
-    level = 1   # <--- ZDE nastavení obtížnosti počtu min !!!!!
+    level = 5  # <--- ZDE nastavení obtížnosti počtu min !!!!!
     generation = 0
     
     evolving = True
@@ -633,7 +669,7 @@ def main():
         if timer >= SIMSTEPS or nobodys_playing(mes): 
             
             # přepočítání fitness funkcí, dle dat uložených v jedinci
-            handle_mes_fitnesses(mes)   # <--------- ZDE funkce výpočtu fitness !!!!
+            handle_mes_fitnesses(mes, flag)   # <--------- ZDE funkce výpočtu fitness !!!!
             
             update_hof(hof, mes)
             
