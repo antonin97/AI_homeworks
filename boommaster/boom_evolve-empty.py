@@ -599,7 +599,7 @@ def main():
     
     run = True
 
-    level = 5  # <--- ZDE nastavení obtížnosti počtu min !!!!!
+    level = 10  # <--- ZDE nastavení obtížnosti počtu min !!!!!
     generation = 0
     
     evolving = True
