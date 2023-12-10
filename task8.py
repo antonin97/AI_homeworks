@@ -75,29 +75,66 @@ class Env:
     # vrací dvojici 1. frontu dvojic ze startu do cíle, 2. seznam dlaždic
     # k zobrazení - hodí se např. pro zvýraznění cesty, nebo expandovaných uzlů
     # start a cíl se nastaví pomocí set_start a set_goal
-    # <------    ZDE vlastní metoda
-    def path_planner(self):
         
-        # přímo zadrátovaná cesta z bodu (1, 0) do (9, 7)
-        d = deque()
-        d.appendleft((9, 7))
-        d.appendleft((9, 6))
-        d.appendleft((9, 5))
-        d.appendleft((9, 4))
-        d.appendleft((9, 3))
-        d.appendleft((9, 2))
-        d.appendleft((9, 1))
-        d.appendleft((9, 0))
-        d.appendleft((8, 0))
-        d.appendleft((7, 0))
-        d.appendleft((6, 0))
-        d.appendleft((5, 0))
-        d.appendleft((4, 0))
-        d.appendleft((3, 0))
-        d.appendleft((2, 0))
-        d.appendleft((1, 0))
+    # path_planner parametry
+    # 1 - GBFS
+    # 2 - Dijkstra
+    # 3 - A*
+    def path_planner(self, method):
+
+        deque_path = deque()
+        visited = []
+
+        # Dijkstra
+        if method == 2:
+            # matice min vzdáleností do všech validních polí
+            d = np.full((self.height, self.width), np.inf)
+            # startovní pozice 0
+            d[self.starty, self.startx] = 0
+            # pole předchůdců
+            predecedors = np.full((self.height, self.width), None)
+            # set všech aktivních prvků                  
+            active_elements = set([(i, j) for i in range(self.height) for j in range(self.width) if self.is_empty(j, i)])
+            while True:
+                # find minimum in the d matrix
+                active_indices_list = list(active_elements)
+                if len(active_indices_list) == 0:
+                    print("No solution!")
+                    break
+                min_index_flat = np.argmin(d[[i[0] for i in active_indices_list], [i[1] for i in active_indices_list]])
+                min_alive = active_indices_list[min_index_flat]
+
+
+                # remove min_element
+                active_elements.remove(min_alive)
+                # handle finish
+                if min_alive == (self.goaly, self.goalx):
+                    break
+                for neighbor_y, neighbor_x in self.get_neighbors(min_alive[1], min_alive[0]):
+                    # if optimal path to this element has already been found, continue
+                    if (neighbor_x, neighbor_y) not in active_elements:
+                        continue
+                    # if new optimal route has been found, update lists
+                    if d[min_alive[0], min_alive[1]] + 1 < d[neighbor_x, neighbor_y]:
+                        d[neighbor_x, neighbor_y] = d[min_alive[0], min_alive[1]] + 1
+                        predecedors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
                 
-        return d, list(d)
+
+
+            # expanded cells = number has been updated at least once
+            visited = [(j, i) for i in range(self.height) for j in range(self.width) if d[i, j] < np.inf]
+
+            x, y = self.goaly, self.goalx
+
+            while True:
+                deque_path.appendleft((y, x))
+                if x == self.starty and y == self.startx:
+                    break
+                x, y = predecedors[x, y]
+                
+    
+                
+        return deque_path, visited
     
        
         
@@ -108,6 +145,7 @@ class Ufo:
         self.y = y
         self.path = deque()
         self.tiles = []
+        self.passed = []
     
    
     # přemístí ufo na danou pozici - nejprve je dobré zkontrolovat u prostředí, 
@@ -115,6 +153,7 @@ class Ufo:
     def move(self, x, y):
         self.x = x
         self.y = y
+        self.passed.append((x, y))
 
    
     
@@ -226,19 +265,21 @@ BOOM_FONT = pygame.font.SysFont("comicsans", 100)
 LEVEL_FONT = pygame.font.SysFont("comicsans", 20)   
 
 
-TILE_IMAGE = pygame.image.load("tile.jpg")
-MTILE_IMAGE = pygame.image.load("markedtile.jpg")
-HOUSE1_IMAGE = pygame.image.load("house1.jpg")
-HOUSE2_IMAGE = pygame.image.load("house2.jpg")
-HOUSE3_IMAGE = pygame.image.load("house3.jpg")
-TREE1_IMAGE  = pygame.image.load("tree1.jpg")
-TREE2_IMAGE  = pygame.image.load("tree2.jpg")
-UFO_IMAGE = pygame.image.load("ufo.jpg")
-FLAG_IMAGE = pygame.image.load("flag.jpg")
+TILE_IMAGE = pygame.image.load(r".\sprites\tile.jpg")
+MTILE_IMAGE = pygame.image.load(r".\sprites\markedtile.jpg")
+MTILE2_IMAGE = pygame.image.load(r".\sprites\markedtile2.jpg")
+HOUSE1_IMAGE = pygame.image.load(r".\sprites\house1.jpg")
+HOUSE2_IMAGE = pygame.image.load(r".\sprites\house2.jpg")
+HOUSE3_IMAGE = pygame.image.load(r".\sprites\house3.jpg")
+TREE1_IMAGE  = pygame.image.load(r".\sprites\tree1.jpg")
+TREE2_IMAGE  = pygame.image.load(r".\sprites\tree2.jpg")
+UFO_IMAGE = pygame.image.load(r".\sprites\ufo.jpg")
+FLAG_IMAGE = pygame.image.load(r".\sprites\flag.jpg")
 
 
 TILE = pygame.transform.scale(TILE_IMAGE, (TILESIZE, TILESIZE))
 MTILE = pygame.transform.scale(MTILE_IMAGE, (TILESIZE, TILESIZE))
+MTILE2 = pygame.transform.scale(MTILE2_IMAGE, (TILESIZE, TILESIZE))
 HOUSE1 = pygame.transform.scale(HOUSE1_IMAGE, (TILESIZE, TILESIZE))
 HOUSE2 = pygame.transform.scale(HOUSE2_IMAGE, (TILESIZE, TILESIZE))
 HOUSE3 = pygame.transform.scale(HOUSE3_IMAGE, (TILESIZE, TILESIZE))
@@ -276,6 +317,8 @@ def draw_window(ufo, env):
     for (x, y) in ufo.tiles:
         WIN.blit(MTILE, (x*TILESIZE, y*TILESIZE))
         
+    for (x, y) in ufo.passed:
+        WIN.blit(MTILE2, (x*TILESIZE, y*TILESIZE))
     
     WIN.blit(FLAG, (env.goalx * TILESIZE, env.goaly * TILESIZE))        
     WIN.blit(UFO, (ufo.x * TILESIZE, ufo.y * TILESIZE))
@@ -292,11 +335,13 @@ def main():
     env.set_start(0, 0)
     env.set_goal(9, 7)
     
-    
-    #p, t = env.path_planner()   # cesta pomocí path_planneru prostředí
-    #ufo.set_path(p, t)
-    # ---------------------------------------------------
-    
+    # path_planner parametry
+    # 1 - GBFS
+    # 2 - Dijkstra
+    # 3 - A*
+    p, t = env.path_planner(2)   # cesta pomocí path_planneru prostředí
+    ufo.set_path(p, t)
+ 
     
     clock = pygame.time.Clock()
     
@@ -310,9 +355,7 @@ def main():
 
         # <---- reaktivní pohyb dokud nedojde do cíle 
         if (ufo.x != env.goalx) or (ufo.y != env.goaly):        
-            x, y = ufo.reactive_go(env)
-            
-            #x, y = ufo.execute_path()
+            x, y = ufo.execute_path()
             
             if env.is_valid_xy(x, y):
                 ufo.move(x, y)
