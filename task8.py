@@ -171,9 +171,9 @@ class Env:
             path_eval = np.empty((self.width, self.height), dtype=object)
             for i in range(self.width):
                 for j in range(self.height):
-                    # optimal distance so far (infinity), cell-goal distance
-                    path_eval[i, j] = np.array([np.inf, ((i - self.goalx) ** 2 + (j - self.goaly) ** 2) ** 0.5])
-
+                    # optimal distance so far (infinity), cell-goal Manhattan distance
+                    path_eval[i, j] = np.array([np.inf, abs(i - self.goalx) + abs(j - self.goaly)])
+            print(path_eval)
             # setting path length 0 for starting point
             path_eval[self.startx, self.starty][0] = 0
 
@@ -212,10 +212,12 @@ class Env:
                         continue
                     else:
                         # save predecessor and add to fringe
-                        predecessors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
                         fringe.add((neighbor_x, neighbor_y))
-                        # updating the g(u)
-                        path_eval[neighbor_x, neighbor_y][0] = path_eval[min_alive[0], min_alive[1]][0] + 1
+                        # updating the g(u) if it improves the path length
+                        if path_eval[min_alive[0], min_alive[1]][0] + 1 < path_eval[neighbor_x, neighbor_y][0]:
+                            path_eval[neighbor_x, neighbor_y][0] = path_eval[min_alive[0], min_alive[1]][0] + 1
+                            predecessors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
+
 
         # expanded cells = predecessor value has been updatet at least once
         visited = [(i, j) for i in range(self.width) for j in range(self.height) if predecessors[i, j] != None]
@@ -351,14 +353,20 @@ if (3, 3) in blocks_env_2:
 if (25, 19) in blocks_env_2:
     blocks_env_2.remove((25, 19))
 
-blocks_env_3 = blocks_env_2 + [(19, 10), (22, 9), (23, 9), (25, 8), (24, 15), (19, 16)]
+blocks_env_3 = blocks_env_2 + [(19, 10), (22, 9), (23, 9), (25, 8), (24, 15), (19, 16), (9, 17)]
 
 
-y = input("Choose maze:\n1 = given maze\n2 = big easy maze\n3 = big complicated maze\n")
+y = int(input("Choose maze:\n1 = given maze\n2 = big easy maze\n3 = big complicated maze\nelse empty maze\n"))
 print("_" * 40)
-env, ufo = create_env(12, 9, (0, 0), (9, 7), blocks_env_1) # option 1
-env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_2) # option 2
-env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_3) # option 2
+
+if y == 1:
+    env, ufo = create_env(12, 9, (0, 0), (9, 7), blocks_env_1) # option 1
+elif y == 2:
+    env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_2) # option 2
+elif y == 3:
+    env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_3) # option 2
+else:
+    env, ufo = create_env(35, 18, (1, 7), (34, 9), [])
 
 
 
