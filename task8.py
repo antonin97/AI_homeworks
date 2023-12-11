@@ -82,22 +82,67 @@ class Env:
     # 3 - A*
     def path_planner(self, method):
 
-        deque_path = deque()
-        visited = []
+        # common params for all path searching algorithms
+        # array of predecessors
+        predecessors = np.full((self.width, self.height), None)
+        # all active elements (empty cells that hasn't been expanded yet)             
+        active_elements = set([(i, j) for i in range(self.width) for j in range(self.height) if self.is_empty(i, j)])
 
-        # Dijkstra
+        # 1. Greedy best first search (GBFS)
+        if method == 1:
+            # heuristics for all cells
+            heur = np.full((self.width, self.height), None)
+            for i in range(self.width):
+                for j in range(self.height):
+                    if self.is_empty(i, j):
+                        # calculating distance for every empty cell
+                        heur[i, j] = ((i - self.goalx) ** 2 + (j - self.goaly) ** 2) ** 0.5
+
+            # expanded cells - with the start cell inside
+            fringe = {(self.startx, self.starty)}
+            while True:
+                active_indices_fringe = fringe & active_elements
+
+                # if the fringe is full of inactive elements, there is no way to get to the finish
+                if len(active_indices_fringe) == 0:
+                    print("No solution!")
+                    break
+
+                # finding the element with the lowest heuristic in the fringe
+                active_indices_fringe_list = list(active_indices_fringe)
+                min_index_flat = np.argmin(heur[[i[0] for i in active_indices_fringe_list], [i[1] for i in active_indices_fringe_list]])
+                min_alive = active_indices_fringe_list[min_index_flat]
+
+                # expanding the node = removing from the active elements
+                active_elements.remove(min_alive)
+
+                # handle goal cell
+                if min_alive == (self.goalx, self.goaly):
+                    break
+
+                 # exploring neighbors of the best heuristic cell
+                for neighbor_x, neighbor_y in self.get_neighbors(min_alive[0], min_alive[1]):
+                    # if optimal path to this element has already been found, continue
+                    if (neighbor_x, neighbor_y) not in active_elements:
+                        continue
+                    else:
+                        # save predecessor and add to fringe
+                        predecessors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
+                        fringe.add((neighbor_x, neighbor_y))
+              
+
+
+        # 2. Dijkstra
         if method == 2:
-            # matice min vzdáleností do všech validních polí
-            d = np.full((self.height, self.width), np.inf)
-            # startovní pozice 0
-            d[self.starty, self.startx] = 0
-            # pole předchůdců
-            predecedors = np.full((self.height, self.width), None)
-            # set všech aktivních prvků                  
-            active_elements = set([(i, j) for i in range(self.height) for j in range(self.width) if self.is_empty(j, i)])
+            # matrix of min distances for all cells, full of infinities
+            d = np.full((self.width, self.height), np.inf)
+            # start position = 0
+            d[self.startx, self.starty] = 0
+
             while True:
                 # find minimum in the d matrix
                 active_indices_list = list(active_elements)
+                # no active node inside the list
                 if len(active_indices_list) == 0:
                     print("No solution!")
                     break
@@ -107,32 +152,37 @@ class Env:
 
                 # remove min_element
                 active_elements.remove(min_alive)
-                # handle finish
-                if min_alive == (self.goaly, self.goalx):
+                # handle fgoal cell
+                if min_alive == (self.goalx, self.goaly):
                     break
-                for neighbor_y, neighbor_x in self.get_neighbors(min_alive[1], min_alive[0]):
+                for neighbor_x, neighbor_y in self.get_neighbors(min_alive[0], min_alive[1]):
                     # if optimal path to this element has already been found, continue
                     if (neighbor_x, neighbor_y) not in active_elements:
                         continue
                     # if new optimal route has been found, update lists
                     if d[min_alive[0], min_alive[1]] + 1 < d[neighbor_x, neighbor_y]:
                         d[neighbor_x, neighbor_y] = d[min_alive[0], min_alive[1]] + 1
-                        predecedors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
+                        predecessors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
+
+
+        # 3. A*
+        if method == 3:
+            pass
                 
 
 
-            # expanded cells = number has been updated at least once
-            visited = [(j, i) for i in range(self.height) for j in range(self.width) if d[i, j] < np.inf]
+        # expanded cells = predecessor value has been updatet at least once
+        visited = [(i, j) for i in range(self.width) for j in range(self.height) if predecessors[i, j] != None]
 
-            x, y = self.goaly, self.goalx
-
-            while True:
-                deque_path.appendleft((y, x))
-                if x == self.starty and y == self.startx:
-                    break
-                x, y = predecedors[x, y]
-                
-    
+        # reconstructing the path
+        deque_path = deque()
+        x, y = self.goalx, self.goaly
+        while True:
+            deque_path.appendleft((x, y))
+            if x == self.startx and y == self.starty:
+                break
+            x, y = predecessors[x, y]
+            
                 
         return deque_path, visited
     
@@ -218,7 +268,7 @@ env.add_block(4, 4)
 env.add_block(5, 5)
 env.add_block(6, 6)
 env.add_block(7, 7)
-env.add_block(8, 8)
+# env.add_block(8, 8)
 env.add_block(0, 8)
 
 env.add_block(11, 1)
@@ -326,6 +376,8 @@ def draw_window(ufo, env):
     pygame.display.update()
     
     
+
+
     
 
 def main():
@@ -333,13 +385,13 @@ def main():
     
     #  <------------   nastavení startu a cíle prohledávání !!!!!!!!!!
     env.set_start(0, 0)
-    env.set_goal(9, 7)
+    env.set_goal(3, 6) # 3, 6 / 9, 7 default
     
     # path_planner parametry
     # 1 - GBFS
     # 2 - Dijkstra
     # 3 - A*
-    p, t = env.path_planner(2)   # cesta pomocí path_planneru prostředí
+    p, t = env.path_planner(1)   # cesta pomocí path_planneru prostředí
     ufo.set_path(p, t)
  
     
