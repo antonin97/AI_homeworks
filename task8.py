@@ -167,9 +167,55 @@ class Env:
 
         # 3. A*
         if method == 3:
-            pass
-                
+            # best possible path + heuristics h(u) for all cells
+            path_eval = np.empty((self.width, self.height), dtype=object)
+            for i in range(self.width):
+                for j in range(self.height):
+                    # optimal distance so far (infinity), cell-goal distance
+                    path_eval[i, j] = np.array([np.inf, ((i - self.goalx) ** 2 + (j - self.goaly) ** 2) ** 0.5])
 
+            # setting path length 0 for starting point
+            path_eval[self.startx, self.starty][0] = 0
+
+            # expanded cells - with the start cell inside
+            fringe = {(self.startx, self.starty)}
+            while True:
+                active_indices_fringe = fringe & active_elements
+
+                # if the fringe is full of inactive elements, there is no way to get to the finish
+                if len(active_indices_fringe) == 0:
+                    print("No solution!")
+                    break
+
+                # matrix f(u) = h(u) + g(u)
+                sum_path_eval = np.zeros((self.width, self.height))
+                for i in range(self.width):
+                    for j in range(self.height):
+                        sum_path_eval[i, j] = path_eval[i, j][0] + path_eval[i, j][1]
+
+                # finding the element with the lowest path_eval in the fringe
+                active_indices_fringe_list = list(active_indices_fringe)
+                min_index_flat = np.argmin(sum_path_eval[[i[0] for i in active_indices_fringe_list], [i[1] for i in active_indices_fringe_list]])
+                min_alive = active_indices_fringe_list[min_index_flat]
+
+                # expanding the node = removing from the active elements
+                active_elements.remove(min_alive)
+
+                # handle goal cell
+                if min_alive == (self.goalx, self.goaly):
+                    break
+
+                # exploring neighbors of the best f(u) cell
+                for neighbor_x, neighbor_y in self.get_neighbors(min_alive[0], min_alive[1]):
+                    # if optimal path to this element has already been found, continue
+                    if (neighbor_x, neighbor_y) not in active_elements:
+                        continue
+                    else:
+                        # save predecessor and add to fringe
+                        predecessors[neighbor_x, neighbor_y] = (min_alive[0], min_alive[1])
+                        fringe.add((neighbor_x, neighbor_y))
+                        # updating the g(u)
+                        path_eval[neighbor_x, neighbor_y][0] = path_eval[min_alive[0], min_alive[1]][0] + 1
 
         # expanded cells = predecessor value has been updatet at least once
         visited = [(i, j) for i in range(self.width) for j in range(self.height) if predecessors[i, j] != None]
@@ -255,45 +301,66 @@ TILESIZE = 50
 
 
 #<------    definice prostředí a překážek !!!!!!
+def create_env(WIDTH, HEIGHT, start, goal, blocks):
+    env = Env(WIDTH, HEIGHT)
+    env.set_start(start[0], start[1])
+    env.set_goal(goal[0], goal[1])
+    for x, y in blocks:
+        env.add_block(x, y)
 
-WIDTH = 12
-HEIGHT = 9
+    ufo = Ufo(env.startx, env.starty)
 
-env = Env(WIDTH, HEIGHT)
+    return env, ufo
 
-env.add_block(1, 1)
-env.add_block(2, 2)
-env.add_block(3, 3)
-env.add_block(4, 4)
-env.add_block(5, 5)
-env.add_block(6, 6)
-env.add_block(7, 7)
-# env.add_block(8, 8)
-env.add_block(0, 8)
+random.seed(123)
 
-env.add_block(11, 1)
-env.add_block(11, 6)
-env.add_block(1, 3)
-env.add_block(2, 4)
-env.add_block(4, 5)
-env.add_block(2, 6)
-env.add_block(3, 7)
-env.add_block(4, 8)
-env.add_block(0, 8)
+blocks_env_1 = [
+    (1, 1),
+    (2, 2),
+    (3, 3),
+    (4, 4),
+    (5, 5),
+    (6, 6),
+    (7, 7),
+    (8, 8),
+    (0, 8),
+    (11, 1),
+    (11, 6),
+    (1, 3),
+    (2, 4),
+    (4, 5),
+    (2, 6),
+    (3, 7),
+    (4, 8),
+    (0, 8),
+    (1, 8),
+    (2, 8),
+    (3, 5),
+    (4, 8),
+    (5, 6),
+    (6, 4),
+    (7, 2),
+    (8, 1)
+]
 
 
-env.add_block(1, 8)
-env.add_block(2, 8)
-env.add_block(3, 5)
-env.add_block(4, 8)
-env.add_block(5, 6)
-env.add_block(6, 4)
-env.add_block(7, 2)
-env.add_block(8, 1)
+
+blocks_env_2 = list(set([(random.randint(0, 29), random.randint(0, 18)) for _ in range(180)]))
+if (3, 3) in blocks_env_2:
+    blocks_env_2.remove((3, 3))
+if (25, 19) in blocks_env_2:
+    blocks_env_2.remove((25, 19))
+
+blocks_env_3 = blocks_env_2 + [(19, 10), (22, 9), (23, 9), (25, 8), (24, 15), (19, 16)]
 
 
-# pozice ufo <--------------------------
-ufo = Ufo(env.startx, env.starty)
+y = input("Choose maze:\n1 = given maze\n2 = big easy maze\n3 = big complicated maze\n")
+print("_" * 40)
+env, ufo = create_env(12, 9, (0, 0), (9, 7), blocks_env_1) # option 1
+env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_2) # option 2
+env, ufo = create_env(30, 20, (3, 3), (28, 17), blocks_env_3) # option 2
+
+
 
 WIN = pygame.display.set_mode((env.width * TILESIZE, env.height * TILESIZE))
 
@@ -305,7 +372,7 @@ WHITE = (255, 255, 255)
 
 
 
-FPS = 2
+FPS = 10
 
 
 
@@ -384,14 +451,14 @@ def main():
     
     
     #  <------------   nastavení startu a cíle prohledávání !!!!!!!!!!
-    env.set_start(0, 0)
-    env.set_goal(3, 6) # 3, 6 / 9, 7 default
     
     # path_planner parametry
     # 1 - GBFS
     # 2 - Dijkstra
     # 3 - A*
-    p, t = env.path_planner(1)   # cesta pomocí path_planneru prostředí
+    x = int(input("Choose maze solving algorithm:\n1 = GBSF\n2 = Dijkstra\n3 = A*\n"))
+    print("_" * 40)
+    p, t = env.path_planner(x)   # cesta pomocí path_planneru prostředí
     ufo.set_path(p, t)
  
     
