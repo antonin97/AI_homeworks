@@ -75,17 +75,17 @@ class Env:
         return moves
     
         
-    def add_block(self, x, y, t):
+    def add_danger_block(self, x, y):
         if self.arr[x, y] == 0:
-            #r = random.randint(1, BLOCKTYPES)
-            self.arr[x, y] = t
+            r = random.randint(1, BLOCKTYPES)
+            self.arr[x, y] = r
             
     def get_tile_type(self, x, y):
         return self.arr[x, y]        
           
     # funkce aktualnich odmen
     # action = 0, 1, 2, 3 = left, up, right, down       
-    # vraci nove x, y, odmenu, false pokud je stav terminalni
+    # vraci nove x, y, odmenu, True pokud je stav terminalni
     def move(self, x, y, action):
         
         newx = x
@@ -94,15 +94,19 @@ class Env:
         if action == 0:
             newx -= 1
         if action == 1:
-            newy += 1
+            # newy += 1
+            newy -= 1
         if action == 2:
             newx += 1
         if action == 3:
-            newy -= 1
+            # newy -= 1
+            newy += 1
             
+        # nevalidní koordinát - náraz do zdi
         if not self.is_valid_xy(newx, newy):
            return (x, y, self.wallreward, False) 
         
+        # nebezpečí
         if self.arr[newx, newy] > 0:
             r = random.random()
             if r < self.dieprob:
@@ -110,6 +114,7 @@ class Env:
             else:
                 return (newx, newy, self.movereward, False)
         
+        # dosáhnutí cíle
         if newx==self.goalx and newy==self.goaly:
             return (newx, newy, self.goalreward, True)
         
@@ -141,9 +146,9 @@ pygame.font.init()
 WHITE = (255, 255, 255)
 
 
-DIRECTIONS = ["left", "up", "right", "down"]
+DIRECTIONS = ["left", "down", "right", "up"]
 
-FPS = 1
+FPS = 60
 
 
 
@@ -153,13 +158,13 @@ BOOM_FONT = pygame.font.SysFont("comicsans", 100)
 LEVEL_FONT = pygame.font.SysFont("comicsans", 20)   
 
 
-TILE_IMAGE = pygame.image.load("tile.jpg")
-MTILE_IMAGE = pygame.image.load("markedtile.jpg")
-DANGER1_IMAGE = pygame.image.load("danger1.jpg")
-DANGER2_IMAGE = pygame.image.load("danger2.jpg")
-DANGER3_IMAGE = pygame.image.load("danger3.jpg")
-DANGER4_IMAGE  = pygame.image.load("danger4.jpg")
-FLAG_IMAGE = pygame.image.load("flag.jpg")
+TILE_IMAGE = pygame.image.load("sprites/tile.jpg")
+MTILE_IMAGE = pygame.image.load("sprites/markedtile.jpg")
+DANGER1_IMAGE = pygame.image.load("sprites/danger1.jpg")
+DANGER2_IMAGE = pygame.image.load("sprites/danger2.jpg")
+DANGER3_IMAGE = pygame.image.load("sprites/danger3.jpg")
+DANGER4_IMAGE  = pygame.image.load("sprites/danger4.jpg")
+FLAG_IMAGE = pygame.image.load("sprites/flag.jpg")
 
 
 TILE = pygame.transform.scale(TILE_IMAGE, (TILESIZE, TILESIZE))
@@ -177,7 +182,7 @@ FLAG = pygame.transform.scale(FLAG_IMAGE, (TILESIZE, TILESIZE))
         
         
 
-def draw_window(env):
+def draw_window(env, Q):
 
     for i in range(env.width):
         for j in range(env.height):
@@ -200,11 +205,12 @@ def draw_window(env):
     for i in range(env.width):
         for j in range(env.height):  
 
-            direct = DIRECTIONS[0]  #<------ vypis akce, ci cohokoli jineho
-            
+            direct = DIRECTIONS[np.argmax(Q[i, j, :])] #<------ vypis akce, ci cohokoli jineho
+
             t = VALUE_FONT.render(direct, 1, WHITE)   
 
-            WIN.blit(t, (i*TILESIZE + 10, (env.height - j - 1)*TILESIZE + 10))    
+            WIN.blit(t, (i*TILESIZE + 10, (env.height - j - 1)*TILESIZE + 10))
+    
        
     pygame.display.update()
     
@@ -219,38 +225,87 @@ def main():
     env.set_goal(WIDTH-1, HEIGHT-1)
     
     
-    # pravdepodobnost umrti na neprazdnych polickach
-    env.dieprob = 0.2
+
+    # pravdepodobnost umrti na danger polickach
+    env.dieprob = 0.7
     
     # nastaveni odmen
     env.diereward = -100 # umrti
-    env.wallreward = -1.0 # odmena za vykroceni z herniho planu
+    env.wallreward = -5.0 # odmena za vykroceni z herniho planu
     env.movereward = 0.0 # pohyb
-    env.goalreward = 30.0 # nalezeni cil
+    env.goalreward = 40.0 # nalezeni cil
     
 
     # nebezpeci
-    env.add_block(2, 1, 1)
-    env.add_block(2, 3, 3)   
-    env.add_block(0, 3, 4)   
+    env.add_danger_block(2, 1)
+    env.add_danger_block(2, 3)   
+    env.add_danger_block(0, 3)   
     
     clock = pygame.time.Clock()
     
     run = True
+
+    # Initialize Q-matrix
+    Q = np.zeros((env.width, env.height, len(DIRECTIONS)))
+
+    # Hyperparameters
+    learning_rate = 0.1
+    discount_factor = 0.9
+    exploration_prob = 0.2
+    num_episodes = 1000
+
+    def epsilon_greedy_action(x, y, exploation=False):
+        if not exploation and np.random.rand() < exploration_prob:
+            return np.random.choice(len(DIRECTIONS))
+        else:
+            return np.argmax(Q[x, y, :])
+
+    def update_q_value(x, y, action, new_x, new_y, reward):
+        Q[x, y, action] = (1 - learning_rate) * Q[x, y, action] + \
+                        learning_rate * (reward + discount_factor * np.max(Q[new_x, new_y, :]))
+
+    def train_q_learning(env):
+        for episode in range(num_episodes):
+            x, y = env.startx, env.starty
+            terminal = False
+
+            while not terminal:
+                action = epsilon_greedy_action(x, y)
+                new_x, new_y, reward, terminal = env.move(x, y, action)
+
+                update_q_value(x, y, action, new_x, new_y, reward)
+
+                x, y = new_x, new_y
+
+    # reinforcement Q learning
+    train_q_learning(env)
     
     while run:  
-        
         clock.tick(FPS)
-        
+                
+        # choose action using learned Q-values
+        action = epsilon_greedy_action(env.startx, env.starty, True)
 
-       # <------ update strategie, uceni, vypoctu?
+        # execute chosen action and get new state
+        new_x, new_y, reward, terminal = env.move(env.startx, env.starty, action)
+
+        # update Q-value based on the new state and reward
+        update_q_value(env.startx, env.starty, action, new_x, new_y, reward)
+
+        # Update agent's position
+        env.startx, env.starty = new_x, new_y
 
         env.episodenum += 1
         pygame.display.set_caption("Danger world, ep: " + str(env.episodenum))
 
-                        
         
-        draw_window(env)
+        draw_window(env, Q)
+
+        if terminal:
+            env.startx, env.starty = 0, 0
+            clock.tick(FPS)
+            draw_window(env, Q)
+        
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
