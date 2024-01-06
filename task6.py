@@ -39,10 +39,10 @@ LEVEL_FONT = pygame.font.SysFont("comicsans", 20)
 
 
 
-ENEMY_IMAGE  = pygame.image.load("mine.png")
-ME_IMAGE = pygame.image.load("me.png")
-SEA_IMAGE = pygame.image.load("sea.png")
-FLAG_IMAGE = pygame.image.load("flag.png")
+ENEMY_IMAGE  = pygame.image.load("./sprites/mine.png")
+ME_IMAGE = pygame.image.load("./sprites/me.png")
+SEA_IMAGE = pygame.image.load("./sprites/sea.png")
+FLAG_IMAGE = pygame.image.load("./sprites/flag.png")
 
 
 ENEMY_SIZE = 50
