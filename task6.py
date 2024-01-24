@@ -557,7 +557,7 @@ def update_hof(hof, mes):
 def main():
     
     # creating an outline of the neural network. Weights are set later on.
-    # 9 inputs, *hidden layers, 4 outputs
+    # 10 inputs, *hidden layers, 4 outputs
     NN_layout = [10, 6, 6, 4]
     NN = create_nn_function(NN_layout)
     n_weights = sum(NN_layout[i] * NN_layout[i + 1] for i in range(len(NN_layout) - 1))

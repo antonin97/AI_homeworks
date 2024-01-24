@@ -10,7 +10,7 @@ import numpy as np
 from collections import deque
 
 pygame.font.init()
-
+random.seed(12345)
 
 BLOCKTYPES = 4
 
