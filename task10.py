@@ -10,7 +10,7 @@ import numpy as np
 from collections import deque
 
 pygame.font.init()
-random.seed(12345)
+random.seed(1234567)
 
 BLOCKTYPES = 4
 
@@ -255,8 +255,8 @@ def main():
     num_episodes = 1000
 
     def epsilon_greedy_action(x, y, exploation=False):
-        if not exploation and np.random.rand() < exploration_prob:
-            return np.random.choice(len(DIRECTIONS))
+        if not exploation and random.random() < exploration_prob:
+            return random.randint(0,len(DIRECTIONS)-1)
         else:
             return np.argmax(Q[x, y, :])
 
